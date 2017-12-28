@@ -1,0 +1,69 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'bundler/setup'
+
+require 'net/http'
+require 'uri'
+require 'json'
+require 'curb'
+require 'pp'
+
+$API_HOST    = 'http://freedns.afraid.org/dynamic/update.php'
+$EXT_IP_URL  = 'http://myexternalip.com/raw'
+$CONFIG_PATH = './config.json'
+
+$config = JSON.parse(File.read($CONFIG_PATH))
+
+def getExternalIP
+	Net::HTTP.get(
+		URI.parse($EXT_IP_URL)
+	).gsub("\n", '')
+end
+
+def APICall(token)
+	ch                = Curl::Easy.new
+	ch.url            = $API_HOST + '?' + token
+	ch.header_in_body = false
+
+	ch.http_get
+
+	curlData   = ch.body_str
+	curlStatus = ch.status.to_i()
+
+	ch.close
+	ch = nil
+
+	{
+		'data'   => curlData,
+		'status' => curlStatus
+	}
+end
+
+# Obtain external IP address
+$externalIP = getExternalIP
+
+# Exit if IP address hasn't changed since last run
+if $externalIP == $config['last_ip']
+	exit
+end
+
+allOK = true
+
+$config['tokens'].each do |d, t|
+	p 'Updating `' + d + '` ...'
+
+	res = APICall(t)
+
+	if res.key?('status') && res['status'].to_i() != 200
+		allOK = false
+	end
+end
+
+# On success, update last IP address in config file
+if allOK
+	$config['last_ip'] = $externalIP
+	File.open($CONFIG_PATH, 'w') do |f|
+		f.write(JSON.pretty_generate($config))
+	end
+end
