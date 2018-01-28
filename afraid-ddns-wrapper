@@ -1,4 +1,4 @@
 #!/bin/bash
 
 cd $(dirname "$0")
-bundle exec afraid-ddns
+/usr/bin/bundle exec afraid-ddns
